@@ -1,7 +1,6 @@
-const IORedis = require("ioredis");
+const { Redis } = require("@upstash/redis");
 
-const connection = new IORedis(process.env.REDIS_URL, {
-  maxRetriesPerRequest: null,
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
-
-module.exports = connection;
