@@ -165,7 +165,7 @@ const createVendor = async (req, res) => {
                             
                             <p style="text-align:center; color:#6b7280; font-size:14px; margin:20px 0 0;">
                                 Or copy this link:<br>
-                                <a href="http://localhost:3000/login" style="color:#4f46e5; word-break:break-all;">http://localhost:3000/login</a>
+                                <a href="https://e-commerxx.netlify.app/login" style="color:#4f46e5; word-break:break-all;">http://localhost:3000/login</a>
                             </p>
                             
                             <!-- Security Notice -->
