@@ -7,6 +7,7 @@
     "dev": "nodemon src/server.js"
   },
   "dependencies": {
+    "@upstash/redis": "^1.37.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.74.1",
     "cloudinary": "^2.9.0",
