@@ -190,17 +190,9 @@ const uploadExcelProducts = async (req, res) => {
 
     for (const row of rows) {
       try {
-        const sku = row.ProductSku || null;
-        const name = row.ProductName || null;
-
-        if (!sku && !name) {
-          failed++;
-          continue;
-        }
-
         const core = {
-          product_sku: sku,
-          product_name: name,
+          product_sku: row.ProductSku || null,
+          product_name: row.ProductName || null,
           product_description: row.ProductDescription || "",
           unit_price: row.UnitPrice || 0,
           unit_cost: row.UnitCost || 0,
@@ -208,22 +200,64 @@ const uploadExcelProducts = async (req, res) => {
           unit_of_measure: row.UnitOfMeasure || "",
           parent_category_name: row.ParentCategoryName || "",
           sub_category_name: row.SubCategoryName || "",
-          image_url: row.ImageUrl || null
+          image_url: row.image_url || null,
         };
 
-        const attributes = { ...row };
+        if (!core.product_sku && !core.product_name) {
+          failed++;
+          continue;
+        }
 
+        // ================= CATEGORY AUTO CREATE =================
+        let parentCategoryId = null;
+        let subCategoryId = null;
+
+        if (core.parent_category_name) {
+          const parentSlug = core.parent_category_name
+            .toLowerCase()
+            .replace(/\s+/g, "-");
+
+          const parentRes = await db.query(
+            `INSERT INTO categories (name, slug)
+             VALUES ($1, $2)
+             ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+             RETURNING id`,
+            [core.parent_category_name, parentSlug]
+          );
+
+          parentCategoryId = parentRes.rows[0].id;
+        }
+
+        if (core.sub_category_name && parentCategoryId) {
+          const subSlug = core.sub_category_name
+            .toLowerCase()
+            .replace(/\s+/g, "-");
+
+          const subRes = await db.query(
+            `INSERT INTO categories (name, slug, parent_id)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+             RETURNING id`,
+            [core.sub_category_name, subSlug, parentCategoryId]
+          );
+
+          subCategoryId = subRes.rows[0].id;
+        }
+
+        // ================= ATTRIBUTES =================
+        const attributes = { ...row };
         delete attributes.ProductSku;
         delete attributes.ProductName;
+        delete attributes.ProductDescription;
         delete attributes.UnitPrice;
         delete attributes.UnitCost;
         delete attributes.StockQuantity;
-        delete attributes.ProductDescription;
         delete attributes.UnitOfMeasure;
         delete attributes.ParentCategoryName;
         delete attributes.SubCategoryName;
-        delete attributes.ImageUrl;
+        delete attributes.image_url;
 
+        // ================= INSERT PRODUCT =================
         await db.query(
           `INSERT INTO products (
             vendor_id,
@@ -236,10 +270,12 @@ const uploadExcelProducts = async (req, res) => {
             unit_of_measure,
             parent_category_name,
             sub_category_name,
+            parent_category_id,
+            sub_category_id,
             attributes,
             image_url
           )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
           [
             vendor_id,
             core.product_sku,
@@ -251,8 +287,10 @@ const uploadExcelProducts = async (req, res) => {
             core.unit_of_measure,
             core.parent_category_name,
             core.sub_category_name,
+            parentCategoryId,
+            subCategoryId,
             attributes,
-            core.image_url
+            core.image_url,
           ]
         );
 
@@ -267,9 +305,30 @@ const uploadExcelProducts = async (req, res) => {
       message: "Upload completed",
       success,
       failed,
-      total: rows.length
+      total: rows.length,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 
+const getProductsByCategory = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+
+    const result = await db.query(
+      `SELECT 
+        p.*,
+        v.name AS vendor_name
+      FROM products p
+      LEFT JOIN vendors v ON p.vendor_id = v.id
+      WHERE p.parent_category_id = $1
+         OR p.sub_category_id = $1
+      ORDER BY p.created_at DESC`,
+      [categoryId]
+    );
+
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -282,5 +341,6 @@ module.exports = {
   updateProduct,
   deleteProduct,
   getProductsByVendor,
-  uploadExcelProducts
+  uploadExcelProducts,
+  getProductsByCategory
 };
