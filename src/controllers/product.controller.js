@@ -67,9 +67,15 @@ const createProduct = async (req, res) => {
 // ================= GET ALL =================
 const getProducts = async (req, res) => {
   try {
-    const result = await db.query(
-      "SELECT * FROM products ORDER BY created_at DESC"
-    );
+    const result = await db.query(`
+      SELECT 
+        p.*,
+        v.name AS vendor_name
+      FROM products p
+      LEFT JOIN vendors v ON p.vendor_id = v.id
+      ORDER BY p.created_at DESC
+    `);
+
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -78,11 +84,23 @@ const getProducts = async (req, res) => {
 
 // ================= GET ONE =================
 const getProductById = async (req, res) => {
-  const result = await db.query(
-    "SELECT * FROM products WHERE id=$1",
-    [req.params.id]
-  );
-  res.json(result.rows[0]);
+  try {
+    const result = await db.query(
+      `
+      SELECT 
+        p.*,
+        v.name AS vendor_name
+      FROM products p
+      LEFT JOIN vendors v ON p.vendor_id = v.id
+      WHERE p.id = $1
+    `,
+      [req.params.id]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
 // ================= UPDATE =================
@@ -123,8 +141,12 @@ const updateProduct = async (req, res) => {
 
 // ================= DELETE =================
 const deleteProduct = async (req, res) => {
-  await db.query("DELETE FROM products WHERE id=$1", [req.params.id]);
-  res.json({ message: "Deleted" });
+  try {
+    await db.query("DELETE FROM products WHERE id=$1", [req.params.id]);
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
 // ================= GET BY VENDOR =================
@@ -133,10 +155,15 @@ const getProductsByVendor = async (req, res) => {
     const { vendorId } = req.params;
 
     const result = await db.query(
-      `SELECT * 
-       FROM products
-       WHERE vendor_id = $1
-       ORDER BY created_at DESC`,
+      `
+      SELECT 
+        p.*,
+        v.name AS vendor_name
+      FROM products p
+      LEFT JOIN vendors v ON p.vendor_id = v.id
+      WHERE p.vendor_id = $1
+      ORDER BY p.created_at DESC
+    `,
       [vendorId]
     );
 
@@ -185,6 +212,7 @@ const uploadExcelProducts = async (req, res) => {
         };
 
         const attributes = { ...row };
+
         delete attributes.ProductSku;
         delete attributes.ProductName;
         delete attributes.UnitPrice;
