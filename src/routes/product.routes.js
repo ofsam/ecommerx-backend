@@ -11,8 +11,7 @@ const {
   updateProduct,
   deleteProduct,
   uploadExcelProducts,
-  getProductsByVendor,
-  getProductsByCategory
+  getProductsByVendor
 } = require("../controllers/product.controller");
 
 const auth = require("../middleware/auth.middleware");
@@ -24,8 +23,6 @@ router.get("/", auth, getProducts);
 router.get("/:id", auth, getProductById);
 router.put("/:id", auth, updateProduct);
 router.delete("/:id", auth, deleteProduct);
-
-router.get("/category/:categoryId", getProductsByCategory);
 router.get("/vendor/:vendorId", auth, getProductsByVendor);
 // EXCEL UPLOAD
 router.post(
