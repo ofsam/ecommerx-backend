@@ -1,7 +1,7 @@
 const IORedis = require("ioredis");
 
-const connection = new IORedis(
-  "rediss://default:YOUR_PASSWORD@adapted-tapir-92317.upstash.io:6379"
-);
+const connection = new IORedis(process.env.REDIS_URL, {
+  maxRetriesPerRequest: null,
+});
 
 module.exports = connection;
