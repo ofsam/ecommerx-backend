@@ -155,7 +155,7 @@ const createVendor = async (req, res) => {
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                                 <tr>
                                     <td align="center">
-                                        <a href="http://localhost:3000/login" 
+                                        <a href="https://e-commerxx.netlify.app/login" 
                                            style="background-color:#4f46e5; color:#ffffff; text-decoration:none; padding:16px 32px; border-radius:6px; font-size:17px; font-weight:600; display:inline-block;">
                                             Login to Your Vendor Dashboard
                                         </a>
@@ -165,7 +165,7 @@ const createVendor = async (req, res) => {
                             
                             <p style="text-align:center; color:#6b7280; font-size:14px; margin:20px 0 0;">
                                 Or copy this link:<br>
-                                <a href="https://e-commerxx.netlify.app/login" style="color:#4f46e5; word-break:break-all;">http://localhost:3000/login</a>
+                                <a href="https://e-commerxx.netlify.app/login" style="color:#4f46e5; word-break:break-all;">https://e-commerxx.netlify.app/login</a>
                             </p>
                             
                             <!-- Security Notice -->
