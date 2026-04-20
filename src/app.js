@@ -5,18 +5,6 @@ const productRoutes = require("./routes/product.routes");
 
 const app = express();
 
-const cors = require("cors");
-
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "https://e-commerxx.netlify.app"
-    ],
-    credentials: true,
-  })
-);
-
 app.use(cors());
 app.use(express.json());
 
