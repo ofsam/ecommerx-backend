@@ -1,8 +1,7 @@
-const { Redis } = require("@upstash/redis");
+const IORedis = require("ioredis");
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+const connection = new IORedis(
+  "rediss://default:YOUR_PASSWORD@adapted-tapir-92317.upstash.io:6379"
+);
 
-module.exports = redis;
+module.exports = connection;
