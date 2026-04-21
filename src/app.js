@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const productRoutes = require("./routes/product.routes");
 
-
+const blogRoutes = require("./routes/blog.routes");
 const app = express();
 
 app.use(cors());
@@ -19,5 +19,6 @@ app.use("/api/orders", require("./routes/order.routes"));
 app.use("/api/dashboard", require("./routes/dashboard.routes"));
 app.use("/api", require("./routes/blog.setup.route"));
 app.use("/api/products", productRoutes);
+app.use("/api/blogs", blogRoutes);
 
 module.exports = app;
