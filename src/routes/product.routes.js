@@ -18,20 +18,40 @@ const {
 const auth = require("../middleware/auth.middleware");
 const role = require("../middleware/role.middleware");
 
-// CRUD
-router.post("/", auth, createProduct);
-router.get("/", auth, getProducts);
-router.get("/:id", auth, getProductById);
-router.put("/:id", auth, updateProduct);
-router.delete("/:id", auth, deleteProduct);
+// ================= GET ROUTES =================
+
+// ✅ CATEGORY (MUST COME FIRST)
+router.get("/category/:category", auth, getProductsByCategory);
+
+// ✅ BY VENDOR
 router.get("/vendor/:vendorId", auth, getProductsByVendor);
-router.get("/products/category/:category", getProductsByCategory);
-// EXCEL UPLOAD
+
+// ✅ ALL PRODUCTS
+router.get("/", auth, getProducts);
+
+// ✅ SINGLE PRODUCT (ALWAYS LAST)
+router.get("/:id", auth, getProductById);
+
+
+// ================= MUTATION ROUTES =================
+
+// CREATE
+router.post("/", auth, createProduct);
+
+// UPDATE
+router.put("/:id", auth, updateProduct);
+
+// DELETE
+router.delete("/:id", auth, deleteProduct);
+
+
+// ================= EXCEL UPLOAD =================
+
 router.post(
   "/upload-excel",
   auth,
   role(["SUPER_ADMIN", "VENDOR_ADMIN"]),
-  upload.single("file"),
+  upload.single("file"), // MUST be "file"
   uploadExcelProducts
 );
 
