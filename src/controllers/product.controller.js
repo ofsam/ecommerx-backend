@@ -173,6 +173,33 @@ const getProductsByVendor = async (req, res) => {
   }
 };
 
+const getOrCreateCategory = async (name, parent_id = null) => {
+  if (!name) return null;
+
+  const slug = name.toLowerCase().replace(/\s+/g, "-");
+
+  try {
+    const existing = await db.query(
+      "SELECT * FROM categories WHERE slug=$1 LIMIT 1",
+      [slug]
+    );
+
+    if (existing.rows.length) return existing.rows[0];
+
+    const created = await db.query(
+      `INSERT INTO categories (name, slug, parent_id)
+       VALUES ($1,$2,$3)
+       RETURNING *`,
+      [name, slug, parent_id]
+    );
+
+    return created.rows[0];
+  } catch (err) {
+    console.log("Category error:", err.message);
+    return null; // prevent crash
+  }
+};
+
 // ================= EXCEL UPLOAD =================
 const uploadExcelProducts = async (req, res) => {
   try {
@@ -188,80 +215,77 @@ const uploadExcelProducts = async (req, res) => {
     let success = 0;
     let failed = 0;
 
-    for (const row of rows) {
-      try {
-        const sku = row.ProductSku || null;
-        const name = row.ProductName || null;
+   for (const row of rows) {
+  try {
+    const sku = row.ProductSku || null;
+    const name = row.ProductName || null;
 
-        if (!sku && !name) {
-          failed++;
-          continue;
-        }
-
-        const core = {
-          product_sku: sku,
-          product_name: name,
-          product_description: row.ProductDescription || "",
-          unit_price: row.UnitPrice || 0,
-          unit_cost: row.UnitCost || 0,
-          stock_quantity: row.StockQuantity || 0,
-          unit_of_measure: row.UnitOfMeasure || "",
-          parent_category_name: row.ParentCategoryName || "",
-          sub_category_name: row.SubCategoryName || "",
-          image_url: row.ImageUrl || null
-        };
-
-        const attributes = { ...row };
-
-        delete attributes.ProductSku;
-        delete attributes.ProductName;
-        delete attributes.UnitPrice;
-        delete attributes.UnitCost;
-        delete attributes.StockQuantity;
-        delete attributes.ProductDescription;
-        delete attributes.UnitOfMeasure;
-        delete attributes.ParentCategoryName;
-        delete attributes.SubCategoryName;
-        delete attributes.ImageUrl;
-
-        await db.query(
-          `INSERT INTO products (
-            vendor_id,
-            product_sku,
-            product_name,
-            product_description,
-            unit_price,
-            unit_cost,
-            stock_quantity,
-            unit_of_measure,
-            parent_category_name,
-            sub_category_name,
-            attributes,
-            image_url
-          )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-          [
-            vendor_id,
-            core.product_sku,
-            core.product_name,
-            core.product_description,
-            core.unit_price,
-            core.unit_cost,
-            core.stock_quantity,
-            core.unit_of_measure,
-            core.parent_category_name,
-            core.sub_category_name,
-            attributes,
-            core.image_url
-          ]
-        );
-
-        success++;
-      } catch (err) {
-        console.log("Row failed:", err.message);
-        failed++;
-      }
+    if (!sku && !name) {
+      failed++;
+      continue;
     }
+
+    // ✅ CREATE CATEGORIES
+    const parentCategory = await getOrCreateCategory(row.ParentCategoryName);
+
+    const subCategory = await getOrCreateCategory(
+      row.SubCategoryName,
+      parentCategory?.id
+    );
+
+    // ✅ CLEAN ATTRIBUTES
+    const attributes = { ...row };
+
+    delete attributes.ProductSku;
+    delete attributes.ProductName;
+    delete attributes.UnitPrice;
+    delete attributes.UnitCost;
+    delete attributes.StockQuantity;
+    delete attributes.ProductDescription;
+    delete attributes.UnitOfMeasure;
+    delete attributes.ParentCategoryName;
+    delete attributes.SubCategoryName;
+    delete attributes.ImageUrl;
+
+    // ✅ INSERT PRODUCT
+    await db.query(
+      `INSERT INTO products (
+        vendor_id,
+        product_sku,
+        product_name,
+        product_description,
+        unit_price,
+        unit_cost,
+        stock_quantity,
+        unit_of_measure,
+        parent_category_name,
+        sub_category_name,
+        attributes,
+        image_url
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [
+        vendor_id,
+        sku,
+        name,
+        row.ProductDescription || "",
+        Number(row.UnitPrice) || 0,
+        Number(row.UnitCost) || 0,
+        Number(row.StockQuantity) || 0,
+        row.UnitOfMeasure || "",
+        row.ParentCategoryName || "",
+        row.SubCategoryName || "",
+        attributes,
+        row.ImageUrl || null
+      ]
+    );
+
+    success++;
+  } catch (err) {
+    console.log("Row failed:", err.message);
+    failed++;
+  }
+}
 
     res.json({
       message: "Upload completed",
@@ -274,6 +298,26 @@ const uploadExcelProducts = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+const getProductsByCategory = async (req, res) => {
+  try {
+    const { category } = req.params;
+
+    const result = await db.query(
+      `
+      SELECT *
+      FROM products
+      WHERE parent_category_name = $1
+         OR sub_category_name = $1
+      ORDER BY created_at DESC
+      `,
+      [category]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 
 module.exports = {
   createProduct,
@@ -282,5 +326,6 @@ module.exports = {
   updateProduct,
   deleteProduct,
   getProductsByVendor,
-  uploadExcelProducts
+  uploadExcelProducts,
+  getProductsByCategory
 };
