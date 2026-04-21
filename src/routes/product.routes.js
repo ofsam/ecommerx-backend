@@ -27,7 +27,7 @@ router.get("/category/:category", auth, getProductsByCategory);
 router.get("/vendor/:vendorId", auth, getProductsByVendor);
 
 // ✅ ALL PRODUCTS
-router.get("/", auth, getProducts);
+router.get("/",  getProducts);
 
 // ✅ SINGLE PRODUCT (ALWAYS LAST)
 router.get("/:id", auth, getProductById);
