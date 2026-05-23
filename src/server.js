@@ -1,7 +1,5 @@
 require("dotenv").config();
 // require("./workers/upload.worker");
-console.log("ENV DB_NAME =", process.env.DB_NAME);
-console.log("ENV USER =", process.env.DB_USER);
 
 const app = require("./app");
 const setupSwagger = require("./docs/swagger");

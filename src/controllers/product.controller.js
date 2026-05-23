@@ -2,6 +2,33 @@
 
 const db = require("../config/db");
 const XLSX = require("xlsx");
+const cloudinary = require("cloudinary").v2;
+const streamifier = require("streamifier");
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const getRowImageUrl = (row) =>
+  row.ImageUrl ||
+  row.image_url ||
+  row.imageUrl ||
+  row["Image URL"] ||
+  row["image url"] ||
+  null;
+
+const deleteOrderItemsForProducts = async (client, productIds) => {
+  if (!productIds.length) return 0;
+
+  const result = await client.query(
+    `DELETE FROM order_items WHERE product_id = ANY($1::uuid[])`,
+    [productIds]
+  );
+
+  return result.rowCount;
+};
 
 // ================= CREATE =================
 const createProduct = async (req, res) => {
@@ -116,22 +143,26 @@ const updateProduct = async (req, res) => {
 
     const result = await db.query(
       `UPDATE products
-       SET product_name=$1,
-           unit_price=$2,
-           stock_quantity=$3,
-           attributes=$4,
-           image_url=$5
-       WHERE id=$6
+       SET product_name = COALESCE($1, product_name),
+           unit_price = COALESCE($2, unit_price),
+           stock_quantity = COALESCE($3, stock_quantity),
+           attributes = COALESCE($4, attributes),
+           image_url = COALESCE($5, image_url)
+       WHERE id = $6
        RETURNING *`,
       [
-        product_name,
-        unit_price,
-        stock_quantity,
-        attributes || {},
-        image_url || null,
+        product_name ?? null,
+        unit_price ?? null,
+        stock_quantity ?? null,
+        attributes ?? null,
+        image_url ?? null,
         req.params.id
       ]
     );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Product not found" });
+    }
 
     res.json(result.rows[0]);
   } catch (err) {
@@ -139,13 +170,121 @@ const updateProduct = async (req, res) => {
   }
 };
 
+// ================= UPLOAD IMAGE =================
+const uploadProductImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        error: "Only image files are allowed (JPEG, PNG, GIF, WEBP)",
+      });
+    }
+
+    if (req.file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: "File size should be less than 5MB" });
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "products/images",
+          transformation: [
+            { width: 1200, height: 1200, crop: "limit" },
+            { quality: "auto" },
+          ],
+        },
+        (error, uploadResult) => {
+          if (error) reject(error);
+          else resolve(uploadResult);
+        }
+      );
+      streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+    });
+
+    return res.json({
+      image_url: result.secure_url,
+      public_id: result.public_id,
+      message: "Image uploaded successfully",
+    });
+  } catch (err) {
+    console.error("Product image upload error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 // ================= DELETE =================
 const deleteProduct = async (req, res) => {
+  const client = await db.connect();
+
   try {
-    await db.query("DELETE FROM products WHERE id=$1", [req.params.id]);
-    res.json({ message: "Deleted" });
+    await client.query("BEGIN");
+
+    const removedItems = await deleteOrderItemsForProducts(client, [
+      req.params.id,
+    ]);
+
+    const result = await client.query(
+      "DELETE FROM products WHERE id = $1 RETURNING id",
+      [req.params.id]
+    );
+
+    if (!result.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    await client.query("COMMIT");
+
+    res.json({
+      message: "Deleted",
+      removedOrderItems: removedItems,
+    });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+// ================= DELETE ALL (SUPER ADMIN) =================
+const deleteAllProducts = async (req, res) => {
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const productIdsResult = await client.query("SELECT id FROM products");
+    const productIds = productIdsResult.rows.map((row) => row.id);
+
+    const removedItems = await deleteOrderItemsForProducts(client, productIds);
+
+    const deletedProducts = await client.query(
+      "DELETE FROM products RETURNING id"
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      message: "All products deleted",
+      deletedProducts: deletedProducts.rowCount,
+      removedOrderItems: removedItems,
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -276,7 +415,7 @@ const uploadExcelProducts = async (req, res) => {
         row.ParentCategoryName || "",
         row.SubCategoryName || "",
         attributes,
-        row.ImageUrl || null
+        getRowImageUrl(row)
       ]
     );
 
@@ -324,8 +463,10 @@ module.exports = {
   getProducts,
   getProductById,
   updateProduct,
+  uploadProductImage,
   deleteProduct,
+  deleteAllProducts,
   getProductsByVendor,
   uploadExcelProducts,
-  getProductsByCategory
+  getProductsByCategory,
 };
